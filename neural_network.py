@@ -1,131 +1,107 @@
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import pytorch_lightning as pl
-import pandas as pd
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+import pytorch_lightning as pl
 
-music_genres = {
-    "blues": 0,
-    "classical": 1,
-    "country": 2,
-    "disco": 3,
-    "hiphop": 4,
-    "jazz": 5,
-    "metal": 6,
-    "pop": 7,
-    "reggae": 8,
-    "rock": 9
-}
 
-# Custom Dataset class
 class MyDataset(Dataset):
-    def __init__(self, features, labels):
-        self.features = features
-        self.labels = labels
-        self.labels = [music_genres[genre] for genre in self.labels]
+    def __init__(self, X, y):
+        self.X = torch.from_numpy(X).float()
+        self.y = torch.from_numpy(y).long()
 
     def __len__(self):
-        return len(self.features)
+        return len(self.X)
 
     def __getitem__(self, idx):
-        x = torch.tensor(self.features.iloc[idx].values)
-        y = torch.tensor(self.labels[idx])
-        return x, y
+        return self.X[idx], self.y[idx]
 
 
-# LightningDataModule
-class MyDataModule(pl.LightningDataModule):
-    def __init__(self, csv_file, batch_size=32, test_size=0.2, random_state=42):
-        super(MyDataModule, self).__init__()
-        self.df = None
-        self.val_dataset = None
-        self.train_dataset = None
-        self.csv_file = csv_file
-        self.batch_size = batch_size
-        self.test_size = test_size
-        self.random_state = random_state
-
-    def prepare_data(self):
-        # Load the CSV file into a pandas DataFrame
-        self.df = pd.read_csv(self.csv_file)
-
-    def setup(self, stage=None):
-        # Split the DataFrame into features and labels
-        features = self.df.iloc[:, 1:-1]  # Exclude the first column (filename) and the last column (label)
-        labels = self.df.iloc[:, -1]  # Get the last column as labels
-
-        # Split the features and labels into training and validation sets
-        features_train, features_val, labels_train, labels_val = train_test_split(
-            features, labels, test_size=self.test_size, random_state=self.random_state)
-
-        # Create custom datasets for training and validation
-        self.train_dataset = MyDataset(features_train, labels_train)
-        self.val_dataset = MyDataset(features_val, labels_val)
-
-    def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
-
-
-# Lightning Module
 class MyModel(pl.LightningModule):
-    def __init__(self):
+    def __init__(self, input_dim, hidden_dims, output_dim):
         super(MyModel, self).__init__()
-        # Define your model architecture here
-        self.fc = nn.Sequential(
-            nn.Linear(58, 128, dtype=torch.float64),
-            nn.ReLU(),
-            nn.Linear(128, 64, dtype=torch.float64),
-            nn.ReLU(),
-            nn.Linear(64, 10, dtype=torch.float64),
-        )
+        self.dense1 = nn.Linear(58, 512)
+        self.dropout1 = nn.Dropout(0.2)
+        self.dense2 = nn.Linear(512, 256)
+        self.dropout2 = nn.Dropout(0.2)
+        self.dense3 = nn.Linear(256, 128)
+        self.dropout3 = nn.Dropout(0.2)
+        self.dense4 = nn.Linear(128, 64)
+        self.dropout4 = nn.Dropout(0.2)
+        self.dense5 = nn.Linear(64, 10)
 
     def forward(self, x):
-        return self.fc(x)
+        x = torch.relu(self.dense1(x))
+        x = self.dropout1(x)
+        x = torch.relu(self.dense2(x))
+        x = self.dropout2(x)
+        x = torch.relu(self.dense3(x))
+        x = self.dropout3(x)
+        x = torch.relu(self.dense4(x))
+        x = self.dropout4(x)
+        x = self.dense5(x)
+        return torch.softmax(x, dim=1)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.forward(x)
-        loss = nn.CrossEntropyLoss()(y_hat, y)
+        logits = self(x)
+        loss = nn.CrossEntropyLoss()(logits, y)
 
-        # Calculate accuracy
-        _, predicted_labels = torch.max(y_hat, dim=1)
-        accuracy = (predicted_labels == y).sum().item() / y.size(0)
+        preds = torch.argmax(logits, dim=1)
+        acc = torch.sum(preds == y).item() / len(preds)
 
-        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('train_acc', accuracy, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("train_loss", loss, on_epoch=True, on_step=False,prog_bar=True)
+        self.log("train_acc", acc, on_epoch=True, on_step=False,prog_bar=True)
+
+        #print(f"Train Loss: {loss:.4f}, Train Accuracy: {acc:.4f}")
 
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.forward(x)
-        loss = nn.CrossEntropyLoss()(y_hat, y)
+        logits = self(x)
+        loss = nn.CrossEntropyLoss()(logits, y)
 
-        # Calculate accuracy
-        _, predicted_labels = torch.max(y_hat, dim=1)
-        accuracy = (predicted_labels == y).sum().item() / y.size(0)
+        preds = torch.argmax(logits, dim=1)
+        acc = torch.sum(preds == y).item() / len(preds)
 
-        self.log('val_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('val_acc', accuracy, prog_bar=True, on_step=False, on_epoch=True)
-        return loss
+        self.log("val_loss", loss, on_epoch=True, on_step=False,prog_bar=True)
+        self.log("val_acc", acc, on_epoch=True, on_step=False,prog_bar=True)
+
+        #print(f"Val Loss: {loss:.4f}, Val Accuracy: {acc:.4f}")
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = optim.Adam(self.parameters())
         return optimizer
 
 
-# Initialize the data module
-data_module = MyDataModule(csv_file='data/music_data.csv', batch_size=32)
+final_data = pd.read_csv("data/music_data.csv")
+final_data = final_data.drop(labels='filename', axis=1)
 
-# Initialize the model
-model = MyModel()
+class_list = final_data.iloc[:, -1]
+convertor = LabelEncoder()
+y = convertor.fit_transform(class_list)
 
-# Initialize a trainer
-trainer = pl.Trainer(max_epochs=1000)
+fit = StandardScaler()
+X = fit.fit_transform(np.array(final_data.iloc[:, :-1], dtype=float))
 
-# Train the model
-trainer.fit(model, data_module)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+train_dataset = MyDataset(X_train, y_train)
+test_dataset = MyDataset(X_test, y_test)
+
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=128)
+
+input_dim = X_train.shape[1]
+hidden_dims = [512, 256, 128, 64]
+output_dim = 10
+
+model = MyModel(input_dim, hidden_dims, output_dim)
+
+trainer = pl.Trainer(max_epochs=250, enable_model_summary=True)
+trainer.fit(model, train_loader, test_loader)
