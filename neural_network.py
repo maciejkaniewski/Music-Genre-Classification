@@ -21,8 +21,9 @@ class MyDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
+# comparison of hidden layers sizes
 class MyModel(pl.LightningModule):
-    def __init__(self, input_dim, hidden_dims, output_dim):
+    def __init__(self):
         super(MyModel, self).__init__()
         self.dense1 = nn.Linear(58, 512)
         self.dropout1 = nn.Dropout(0.2)
@@ -48,31 +49,28 @@ class MyModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        logits = self(x)
-        loss = nn.CrossEntropyLoss()(logits, y)
+        y_pred = self(x)
+        loss = nn.CrossEntropyLoss()(y_pred, y)
 
-        preds = torch.argmax(logits, dim=1)
-        acc = torch.sum(preds == y).item() / len(preds)
+        pred = torch.argmax(y_pred, dim=1)
+        acc = torch.sum(pred == y).item() / len(pred)
 
-        self.log("train_loss", loss, on_epoch=True, on_step=False,prog_bar=True)
-        self.log("train_acc", acc, on_epoch=True, on_step=False,prog_bar=True)
-
-        #print(f"Train Loss: {loss:.4f}, Train Accuracy: {acc:.4f}")
+        self.log("train_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log("train_acc", acc, on_epoch=True, on_step=False, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        logits = self(x)
-        loss = nn.CrossEntropyLoss()(logits, y)
+        y_pred = self(x)
+        loss = nn.CrossEntropyLoss()(y_pred, y)
 
-        preds = torch.argmax(logits, dim=1)
-        acc = torch.sum(preds == y).item() / len(preds)
+        pred = torch.argmax(y_pred, dim=1)
+        acc = torch.sum(pred == y).item() / len(pred)
 
-        self.log("val_loss", loss, on_epoch=True, on_step=False,prog_bar=True)
-        self.log("val_acc", acc, on_epoch=True, on_step=False,prog_bar=True)
+        self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log("val_acc", acc, on_epoch=True, on_step=False, prog_bar=True)
 
-        #print(f"Val Loss: {loss:.4f}, Val Accuracy: {acc:.4f}")
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters())
@@ -97,11 +95,7 @@ test_dataset = MyDataset(X_test, y_test)
 train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=128)
 
-input_dim = X_train.shape[1]
-hidden_dims = [512, 256, 128, 64]
-output_dim = 10
+model = MyModel()
 
-model = MyModel(input_dim, hidden_dims, output_dim)
-
-trainer = pl.Trainer(max_epochs=250, enable_model_summary=True)
+trainer = pl.Trainer(max_epochs=500, enable_model_summary=True)
 trainer.fit(model, train_loader, test_loader)
