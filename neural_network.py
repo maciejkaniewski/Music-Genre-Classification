@@ -10,15 +10,15 @@ import pytorch_lightning as pl
 
 
 class MyDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = torch.from_numpy(X).float()
-        self.y = torch.from_numpy(y).long()
+    def __init__(self, x__, y__):
+        self.x = torch.from_numpy(x__).float()
+        self.y = torch.from_numpy(y__).long()
 
     def __len__(self):
-        return len(self.X)
+        return len(self.x)
 
     def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
+        return self.x[idx], self.y[idx]
 
 
 class MyModel(pl.LightningModule):
@@ -61,29 +61,39 @@ class MyModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters())
-        return optimizer
+        return optim.Adam(self.parameters())
 
 
-final_data = pd.read_csv("data/music_data.csv")
-final_data = final_data.drop(labels='filename', axis=1)
+class MusicDataModule(pl.LightningDataModule):
+    def __init__(self, filepath, batch_size=32, num_workers=2):
+        super().__init__()
+        self.test_dataset = None
+        self.train_dataset = None
+        self.filepath = filepath
+        self.batch_size = batch_size
+        self.num_workers = num_workers
 
-class_list = final_data.iloc[:, -1]
-convertor = LabelEncoder()
-y = convertor.fit_transform(class_list)
+    def setup(self, stage=None):
+        data = pd.read_csv(self.filepath)
+        data = data.drop(labels='filename', axis=1)
 
-fit = StandardScaler()
-x = fit.fit_transform(np.array(final_data.iloc[:, :-1], dtype=float))
+        y = LabelEncoder().fit_transform(data.iloc[:, -1])
+        x = StandardScaler().fit_transform(np.array(data.iloc[:, :-1], dtype=float))
 
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
-train_dataset = MyDataset(x_train, y_train)
-test_dataset = MyDataset(x_test, y_test)
+        self.train_dataset = MyDataset(x_train, y_train)
+        self.test_dataset = MyDataset(x_test, y_test)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=12)
-test_loader = DataLoader(test_dataset, batch_size=8, num_workers=12)
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+
+    def val_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
+
 
 model = MyModel()
+data_module = MusicDataModule("data/music_data.csv",num_workers=4)
 
 trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=25)
-trainer.fit(model, train_loader, test_loader)
+trainer.fit(model, data_module)
