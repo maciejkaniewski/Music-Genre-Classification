@@ -27,16 +27,20 @@ class MyModel(pl.LightningModule):
         self.model = nn.Sequential(
             nn.Linear(58, 512),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.BatchNorm1d(512),
+            nn.Dropout(0.4),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.BatchNorm1d(256),
+            nn.Dropout(0.4),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.BatchNorm1d(128),
+            nn.Dropout(0.4),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.BatchNorm1d(64),
+            nn.Dropout(0.4),
             nn.Linear(64, 10),
             nn.Softmax(dim=1)
         )
@@ -56,12 +60,12 @@ class MyModel(pl.LightningModule):
         loss = nn.CrossEntropyLoss()(y_pred, y_)
         pred = torch.argmax(y_pred, dim=1)
         acc = torch.sum(pred == y_).item() / len(pred)
-        self.log(f'{prefix}_loss', loss, on_epoch=True, prog_bar=True)
-        self.log(f'{prefix}_acc', acc, on_epoch=True, prog_bar=True)
+        self.log(f'{prefix}_loss', loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log(f'{prefix}_acc', acc, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters())
+        return optim.Adam(self.parameters(), lr=0.0005, weight_decay=1e-5)
 
 
 class MusicDataModule(pl.LightningDataModule):
@@ -91,9 +95,8 @@ class MusicDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
-
 model = MyModel()
-data_module = MusicDataModule("data/music_data.csv",num_workers=4)
+data_module = MusicDataModule("data/music_data.csv", num_workers=4)
 
-trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=25)
+trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=100, log_every_n_steps=25)
 trainer.fit(model, data_module)
