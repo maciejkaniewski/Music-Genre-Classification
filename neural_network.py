@@ -27,19 +27,15 @@ class MyModel(pl.LightningModule):
         self.model = nn.Sequential(
             nn.Linear(58, 512),
             nn.ReLU(),
-            nn.BatchNorm1d(512),
             nn.Dropout(0.4),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.BatchNorm1d(256),
             nn.Dropout(0.4),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.BatchNorm1d(128),
             nn.Dropout(0.4),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.BatchNorm1d(64),
             nn.Dropout(0.4),
             nn.Linear(64, 10),
             nn.Softmax(dim=1)
@@ -65,7 +61,7 @@ class MyModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=0.0005, weight_decay=1e-5)
+        return optim.Adam(self.parameters(), lr=0.0005)
 
 
 class MusicDataModule(pl.LightningDataModule):
@@ -95,8 +91,9 @@ class MusicDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
+
 model = MyModel()
 data_module = MusicDataModule("data/music_data.csv", num_workers=4)
 
-trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=100, log_every_n_steps=25)
+trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=4)
 trainer.fit(model, data_module)
