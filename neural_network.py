@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import pytorch_lightning as pl
-
+from pytorch_lightning.callbacks import EarlyStopping
 
 class MyDataset(Dataset):
     def __init__(self, x__, y__):
@@ -25,20 +25,19 @@ class MyModel(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(58, 512),
+            # nn.Linear(58, 512),
+            # nn.ReLU(),
+            # nn.Dropout(0.4),
+            # nn.Linear(58, 256),
+            # nn.ReLU(),
+            # nn.Dropout(0.4),
+            nn.Linear(58, 256),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.4),
+            nn.Dropout(0.6),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(64, 10),
-            nn.Softmax(dim=1)
+            nn.Dropout(0.6),
+            nn.Linear(128, 10),
         )
 
     def forward(self, x):
@@ -61,7 +60,7 @@ class MyModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=0.0005)
+        return optim.Adam(self.parameters(), lr=0.00055, weight_decay=1e-5)
 
 
 class MusicDataModule(pl.LightningDataModule):
@@ -92,8 +91,16 @@ class MusicDataModule(pl.LightningDataModule):
         return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
 
+early_stop_callback = EarlyStopping(
+    monitor='val_loss',
+    min_delta=0.001,
+    patience=25,
+    verbose=True,
+    mode='min'
+)
+
 model = MyModel()
 data_module = MusicDataModule("data/music_data.csv", num_workers=4)
 
-trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=4)
+trainer = pl.Trainer(callbacks=[early_stop_callback], accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=4)
 trainer.fit(model, data_module)
