@@ -6,6 +6,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 import pickle
@@ -35,6 +38,8 @@ class MyModel(pl.LightningModule):
             nn.Dropout(0.6),
             nn.Linear(128, 10),
         )
+        self.val_preds = []
+        self.val_labels = []
 
     def forward(self, x):
         return self.model(x)
@@ -43,7 +48,29 @@ class MyModel(pl.LightningModule):
         return self.shared_step(batch, "train")
 
     def validation_step(self, batch, batch_idx):
-        return self.shared_step(batch, "val")
+        x_, y_ = batch
+        y_pred = self(x_)
+        loss = nn.CrossEntropyLoss()(y_pred, y_)
+        pred = torch.argmax(y_pred, dim=1)
+        acc = torch.sum(pred == y_).item() / len(pred)
+        self.log(f'val_loss', loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log(f'val_acc', acc, on_epoch=True, on_step=False, prog_bar=True)
+        self.val_preds.extend(pred.detach().cpu().numpy().tolist())
+        self.val_labels.extend(y_.detach().cpu().numpy().tolist())
+        return loss
+
+    def on_validation_epoch_start(self):
+        self.val_preds = []
+        self.val_labels = []
+
+    def on_validation_epoch_end(self):
+        # Convert lists to tensors
+        val_preds_tensor = torch.tensor(self.val_preds)
+        val_labels_tensor = torch.tensor(self.val_labels)
+        # Calculate confusion matrix
+        cm = confusion_matrix(val_labels_tensor.cpu().numpy(), val_preds_tensor.cpu().numpy())
+        # Store the confusion matrix in an instance variable
+        self.confusion_matrix = cm
 
     def shared_step(self, batch, prefix):
         x_, y_ = batch
@@ -106,10 +133,25 @@ early_stop_callback = EarlyStopping(
     mode='min'
 )
 
+
+class ConfusionMatrixCallback(pl.Callback):
+    def on_fit_end(self, trainer, pl_module):
+        if trainer.global_rank == 0:
+            cm = pl_module.confusion_matrix
+            # Plot confusion matrix
+            plt.figure(figsize=(10, 10))
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+            plt.title("Confusion matrix")
+            plt.ylabel('True label')
+            plt.xlabel('Predicted label')
+            plt.show()
+
+
 model = MyModel()
 data_module = MusicDataModule("data/music_data.csv", num_workers=4)
 
-trainer = pl.Trainer(callbacks=[early_stop_callback], accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=4)
+trainer = pl.Trainer(callbacks=[early_stop_callback, ConfusionMatrixCallback()], accelerator="gpu", devices=1,
+                     max_epochs=500, log_every_n_steps=4)
 trainer.fit(model, data_module)
 
 # Save the model
