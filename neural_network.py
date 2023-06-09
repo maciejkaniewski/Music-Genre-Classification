@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
+import pickle
+
 
 class MyDataset(Dataset):
     def __init__(self, x__, y__):
@@ -25,12 +27,6 @@ class MyModel(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = nn.Sequential(
-            # nn.Linear(58, 512),
-            # nn.ReLU(),
-            # nn.Dropout(0.4),
-            # nn.Linear(58, 256),
-            # nn.ReLU(),
-            # nn.Dropout(0.4),
             nn.Linear(58, 256),
             nn.ReLU(),
             nn.Dropout(0.6),
@@ -76,8 +72,19 @@ class MusicDataModule(pl.LightningDataModule):
         data = pd.read_csv(self.filepath)
         data = data.drop(labels='filename', axis=1)
 
-        y = LabelEncoder().fit_transform(data.iloc[:, -1])
-        x = StandardScaler().fit_transform(np.array(data.iloc[:, :-1], dtype=float))
+        encoder = LabelEncoder()
+        y = encoder.fit_transform(data.iloc[:, -1])
+        scaler = StandardScaler().fit(np.array(data.iloc[:, :-1], dtype=float))
+
+        # Save the encoder
+        with open('model/encoder.pkl', 'wb') as f:
+            pickle.dump(encoder, f)
+
+        # Save the scaler
+        with open('model/scaler.pkl', 'wb') as f:
+            pickle.dump(scaler, f)
+
+        x = scaler.transform(np.array(data.iloc[:, :-1], dtype=float))
 
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
@@ -93,7 +100,7 @@ class MusicDataModule(pl.LightningDataModule):
 
 early_stop_callback = EarlyStopping(
     monitor='val_loss',
-    min_delta=0.001,
+    min_delta=0.0001,
     patience=25,
     verbose=True,
     mode='min'
@@ -104,3 +111,6 @@ data_module = MusicDataModule("data/music_data.csv", num_workers=4)
 
 trainer = pl.Trainer(callbacks=[early_stop_callback], accelerator="gpu", devices=1, max_epochs=500, log_every_n_steps=4)
 trainer.fit(model, data_module)
+
+# Save the model
+torch.save(model.state_dict(), "model/model.pth")
