@@ -6,9 +6,9 @@ import torch
 from pytorch_lightning import LightningModule
 import torch.nn as nn
 import random
+from collections import Counter
+import matplotlib.pyplot as plt
 
-
-# Your defined model
 class MyModel(LightningModule):
     def __init__(self):
         super().__init__()
@@ -29,13 +29,10 @@ class MyModel(LightningModule):
 def extract_features(file_name):
     y, sr = librosa.load(file_name, mono=True)
 
-    # Check the length of the audio
     if len(y) > 30 * sr:
-        # If it's longer than 30 seconds, select a random 30-second chunk
         start = random.randint(0, len(y) - 30 * sr)
         y = y[start: start + 30 * sr]
     else:
-        # If it's shorter or exactly 30 seconds, just use the entire audio
         y = y[:30 * sr]
 
     chroma_stft_mean = np.mean(librosa.feature.chroma_stft(y=y, sr=sr))
@@ -57,11 +54,9 @@ def extract_features(file_name):
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
 
     mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
-    mfcc_list = mfccs.tolist()
     means = np.mean(mfccs, axis=1).tolist()
     vars = np.var(mfccs, axis=1).tolist()
 
-    # Concatenate all features into one array
     features = [len(y), chroma_stft_mean, chroma_stft_var, rms_mean, rms_var,
                 spectral_centroid_mean, spectral_centroid_var, spectral_bandwidth_mean, spectral_bandwidth_var,
                 rolloff_mean, rolloff_var, zero_crossing_rate_mean,
@@ -73,42 +68,47 @@ def extract_features(file_name):
     return np.array(features)
 
 
-def predict_genre(model, file_name):
+def predict_genre(model, file_name, iterations):
+    genres_counter = Counter()
 
-    features = extract_features(file_name)
-    with open('model/scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    features = scaler.transform(features.reshape(1,-1))
-    features_tensor = torch.from_numpy(features).float()
-    # Making a prediction
-    with torch.no_grad():
-        prediction = model(features_tensor)
-    # Load the saved encoder
-    with open('model/encoder.pkl', 'rb') as f:
-        encoder = pickle.load(f)
-    # Decode the predicted genre
-    predicted_genre = encoder.inverse_transform([torch.argmax(prediction).item()])
-    return predicted_genre
+    for _ in range(iterations):
+        features = extract_features(file_name)
+        with open('model/scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+        features = scaler.transform(features.reshape(1,-1))
+        features_tensor = torch.from_numpy(features).float()
+        with torch.no_grad():
+            prediction = model(features_tensor)
+        with open('model/encoder.pkl', 'rb') as f:
+            encoder = pickle.load(f)
+        predicted_genre = encoder.inverse_transform([torch.argmax(prediction).item()])
+        genres_counter[predicted_genre[0]] += 1
+
+    return genres_counter
 
 
 def main():
-    # Set up the argument parser
     parser = argparse.ArgumentParser(description='Predict music genre')
     parser.add_argument('filename', type=str, help='The filename of the song you\'d like to predict the genre of')
-
+    parser.add_argument('iterations', type=int, help='Number of iterations to predict the genre')
     args = parser.parse_args()
 
-    # Load your trained model
     model = MyModel()
     model.load_state_dict(torch.load("model/model.pth"))
     model.eval()
 
-    # Predict genre
-    genre = predict_genre(model, args.filename)
+    genres_counter = predict_genre(model, args.filename, args.iterations)
 
-    print('Predicted genre: ', genre[0])
+    # Visualization
+    labels, values = zip(*genres_counter.items())
+    indexes = np.arange(len(labels))
+    plt.bar(indexes, values, align='center')
+    plt.xticks(indexes, labels)
+    plt.ylabel('Counts')
+    plt.xlabel('Genres')
+    plt.title(f'Genre Prediction Counts for {args.filename}')
+    plt.show()
 
 
 if __name__ == '__main__':
     main()
-
