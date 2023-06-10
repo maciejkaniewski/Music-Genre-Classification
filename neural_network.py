@@ -1,17 +1,17 @@
+import torch
+import pickle
 import numpy as np
 import pandas as pd
-import torch
 import torch.nn as nn
+import seaborn as sns
 import torch.optim as optim
+import pytorch_lightning as pl
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
-import pickle
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
 class MyDataset(Dataset):

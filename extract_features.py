@@ -1,7 +1,7 @@
 import os
+import csv
 import librosa
 import numpy as np
-import csv
 from tqdm import tqdm
 
 data_path = 'data/genres_original/'

@@ -1,13 +1,14 @@
+import torch
+import random
 import pickle
+import librosa
 import argparse
 import numpy as np
-import librosa
-import torch
-from pytorch_lightning import LightningModule
 import torch.nn as nn
-import random
 from collections import Counter
 import matplotlib.pyplot as plt
+from pytorch_lightning import LightningModule
+
 
 class MyModel(LightningModule):
     def __init__(self):
@@ -75,7 +76,7 @@ def predict_genre(model, file_name, iterations):
         features = extract_features(file_name)
         with open('model/scaler.pkl', 'rb') as f:
             scaler = pickle.load(f)
-        features = scaler.transform(features.reshape(1,-1))
+        features = scaler.transform(features.reshape(1, -1))
         features_tensor = torch.from_numpy(features).float()
         with torch.no_grad():
             prediction = model(features_tensor)
