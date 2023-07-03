@@ -2,6 +2,8 @@
 
 Music-Genre-Classification is a project I realized in the first semester of my Master's studies within the Artificial Neural Networks course at the Wroclaw University of Technology in the field of Control Engineering and Robotics. The main goal of this task was to get acquainted with the processing of a selected dataset and to create a neural network model that allows to identify a music genre based on a sound signal.
 
+Dataset used for this project: [GTZAN Dataset - Music Genre Classification](https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification)
+
 ## Setup
 The scripts were tested for `Python 3.10.6` version.
 
